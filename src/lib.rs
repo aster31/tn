@@ -1,8 +1,12 @@
+use env_logger;
+use log::debug;
 use std::{
     ffi::{CStr, c_int},
     ptr::null_mut,
 };
 use tcl_sys::*;
+
+mod array;
 
 extern "C" fn tn_test(
     _cdata: ClientData,
@@ -16,7 +20,6 @@ extern "C" fn tn_test(
         // Unsafe: we assume the Tcl interpreter returned a correct objc
         let obj: *mut Tcl_Obj = unsafe { *objv.add(i) };
         let mut length: c_int = 0;
-        // Unsafe: FFI
         let str_val = unsafe { CStr::from_ptr(Tcl_GetStringFromObj(obj, &mut length)) };
         println!("{}: {}", i, str_val.to_str().unwrap_or("invalid utf8"));
     }
@@ -31,17 +34,22 @@ extern "C" fn tn_test(
 #[allow(non_snake_case)]
 #[unsafe(no_mangle)]
 pub extern "C" fn Tn_Init(interp: *mut Tcl_Interp) -> c_int {
+    env_logger::init();
+    array::array_init(interp);
+
     unsafe {
-        // Unsafe: FFI
+        let _ = Tcl_CreateNamespace(interp, c"tn".as_ptr(), null_mut(), None);
+    }
+
+    unsafe {
         Tcl_CreateObjCommand(
             interp,
-            c"tn::test".as_ptr(),
+            c"::tn::test".as_ptr(),
             Some(tn_test),
             null_mut(),
             None,
         );
     }
 
-    // Unsafe: FFI
     return unsafe { Tcl_PkgProvide(interp, c"tn".as_ptr(), c"0.1".as_ptr()) };
 }
